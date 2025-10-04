@@ -71,7 +71,11 @@ namespace Ombi.Schedule.Jobs.Plex
                 
                 if (userManagementSettings.ImportPlexAdmin)
                 {
-                    await ImportAdmin(userManagementSettings, server, allUsers);
+                    var admin = await ImportAdmin(userManagementSettings, server, allUsers);
+                    if (admin != null)
+                    {
+                        newOrUpdatedUsers.Add(admin);
+                    }
                 }
                 if (userManagementSettings.ImportPlexUsers)
                 {
@@ -244,7 +248,10 @@ namespace Ombi.Schedule.Jobs.Plex
 
             var roleResult = await _userManager.AddToRoleAsync(newUser, OmbiRoles.Admin);
             LogResult(roleResult);
-            return newUser;
+            
+            // Get the new user object from the database to ensure we have the tracked instance
+            var dbUser = await _userManager.Users.FirstOrDefaultAsync(x => x.UserName == newUser.UserName);
+            return dbUser;
         }
 
         private bool LogResult(IdentityResult result)

@@ -463,6 +463,42 @@ namespace Ombi.Schedule.Tests
         }
 
         [Test]
+        public async Task Import_Cleanup_Updated_Admin_Not_In_Missing_List()
+        {
+            _mocker.Setup<ISettingsService<UserManagementSettings>, Task<UserManagementSettings>>(x => x.GetSettingsAsync())
+                .ReturnsAsync(new UserManagementSettings
+                {
+                    ImportPlexAdmin = true,
+                    ImportPlexUsers = false,
+                    DefaultRoles = new List<string>
+                    {
+                        OmbiRoles.RequestMovie
+                    },
+                    CleanupPlexUsers = true,
+                });
+            // Return an admin that already exists in the database (ADMIN_ID)
+            _mocker.Setup<IPlexApi, Task<PlexAccount>>(x => x.GetAccount(It.IsAny<string>())).ReturnsAsync(new PlexAccount
+            {
+                user = new User
+                {
+                    email = "updated@test.com",
+                    authentication_token = "Admin",
+                    title = "Admin",
+                    username = "Admin",
+                    id = "ADMIN_ID", // This ID exists in the test database
+                }
+            });
+
+            await _subject.Execute(null);
+
+            // The updated admin should NOT be deleted by cleanup
+            // Without the fix, ImportAdmin result is not added to newOrUpdatedUsers, so it appears as missing
+            _mocker.Verify<IUserDeletionEngine>(x => x.DeleteUser(It.Is<OmbiUser>(x => x.ProviderUserId == "ADMIN_ID")), Times.Never);
+            // The existing "plex" user should be deleted since it's not in the import
+            _mocker.Verify<IUserDeletionEngine>(x => x.DeleteUser(It.Is<OmbiUser>(x => x.ProviderUserId == "PLEX_ID")), Times.Once);
+        }
+
+        [Test]
         public async Task Import_Skips_Users_Without_Server_Access()
         {
             _mocker.Setup<ISettingsService<UserManagementSettings>, Task<UserManagementSettings>>(x => x.GetSettingsAsync())
